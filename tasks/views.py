@@ -1,5 +1,9 @@
-from django.http import HttpResponse
+from rest_framework import viewsets
+
+from .models import Task
+from .serializers import TaskSerializer
 
 
-def say_hello(request):
-    return HttpResponse('سلام Django!')
+class TaskViewSet(viewsets.ModelViewSet):
+    queryset = Task.objects.all()
+    serializer_class = TaskSerializer
