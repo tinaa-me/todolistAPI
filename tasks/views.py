@@ -13,7 +13,10 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'])
     def toggle(self, request, pk=None):
         task = self.get_object()
-        task.is_completed = not task.is_completed
+        if task.status == Task.Status.DONE:
+            task.status = Task.Status.NOT_STARTED
+        else:
+            task.status = Task.Status.DONE
         task.save()
         serializer = self.get_serializer(task)
         return Response(serializer.data, status=status.HTTP_200_OK)
