@@ -10,7 +10,6 @@ class Task(models.Model):
 
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    is_completed = models.BooleanField(default=False)
     status = models.CharField(
          max_length=20,
          choices=Status.choices,

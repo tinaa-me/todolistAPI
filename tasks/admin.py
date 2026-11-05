@@ -3,6 +3,6 @@ from .models import Task
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'is_completed', 'created_at')
-    list_filter = ('is_completed',)
+    list_display = ('id', 'title', 'status', 'created_at')
+    list_filter = ('status',)
     search_fields = ('title', 'description')

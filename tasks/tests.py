@@ -9,7 +9,7 @@ class TaskAPITestCase(APITestCase):
 
     def setUp(self):
         self.task1 = Task.objects.create(title="Task one", description="first")
-        self.task2 = Task.objects.create(title="Task two", is_completed=True)
+        self.task2 = Task.objects.create(title="Task two", status=Task.Status.DONE)
         self.list_url = reverse('task-list')
 
     def detail_url(self, pk):
@@ -26,7 +26,7 @@ class TaskAPITestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data['title'], 'New task')
-        self.assertFalse(response.data['is_completed'])
+        self.assertEqual(response.data['status'], 'not_started') 
         self.assertIn('id', response.data)
         self.assertEqual(Task.objects.count(), 3)
 
@@ -61,23 +61,22 @@ class TaskAPITestCase(APITestCase):
     # ---------- ویرایش ----------
 
     def test_put_updates_all_fields(self):
-        payload = {'title': 'Replaced', 'description': 'new desc', 'is_completed': True}
+        payload = {'title': 'Replaced', 'description': 'new desc', 'status': 'done'}
         response = self.client.put(self.detail_url(self.task1.id), payload, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.task1.refresh_from_db()
         self.assertEqual(self.task1.title, 'Replaced')
         self.assertEqual(self.task1.description, 'new desc')
-        self.assertTrue(self.task1.is_completed)
+        self.assertEqual(self.task1.status, 'done')
+
 
     def test_patch_updates_partial(self):
-        response = self.client.patch(
-            self.detail_url(self.task1.id), {'is_completed': True}, format='json'
-        )
+        response = self.client.patch(self.detail_url(self.task1.id), {'status': 'doing'}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.task1.refresh_from_db()
-        self.assertTrue(self.task1.is_completed)
+        self.assertEqual(self.task1.status, 'doing')
         self.assertEqual(self.task1.title, 'Task one')
 
     # ---------- حذف ----------
@@ -94,15 +93,15 @@ class TaskAPITestCase(APITestCase):
         response = self.client.patch(self.toggle_url(self.task1.id))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data['is_completed'])
+        self.assertEqual(response.data['status'], 'done')
         self.task1.refresh_from_db()
-        self.assertTrue(self.task1.is_completed)
-
+        self.assertEqual(self.task1.status, 'done')
+    
     def test_toggle_twice_returns_to_original(self):
         self.client.patch(self.toggle_url(self.task1.id))
         response = self.client.patch(self.toggle_url(self.task1.id))
 
-        self.assertFalse(response.data['is_completed'])
+        self.assertEqual(response.data['status'], 'not_started')
 
     def test_toggle_wrong_method(self):
         response = self.client.get(self.toggle_url(self.task1.id))
@@ -178,3 +177,40 @@ class TaskAPITestCase(APITestCase):
         self.assertEqual(
             self.client.patch(self.toggle_url(missing)).status_code, status.HTTP_404_NOT_FOUND
         )
+
+        # ---------- وضعیت‌ها ----------
+
+    def test_default_status_is_not_started(self):
+        response = self.client.post(self.list_url, {'title': 'x'}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['status'], 'not_started')
+
+    def test_all_valid_statuses_accepted(self):
+        for value in ['not_started', 'doing', 'done', 'fail']:
+            response = self.client.patch(
+                self.detail_url(self.task1.id), {'status': value}, format='json'
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response.data['status'], value)
+
+    def test_invalid_status_rejected(self):
+        response = self.client.patch(
+            self.detail_url(self.task1.id), {'status': 'finished'}, format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('status', response.data)
+        self.task1.refresh_from_db()
+        self.assertEqual(self.task1.status, 'not_started')
+
+    def test_toggle_from_done_goes_to_not_started(self):
+        response = self.client.patch(self.toggle_url(self.task2.id))
+
+        self.assertEqual(response.data['status'], 'not_started')
+
+    def test_toggle_from_doing_or_fail_goes_to_done(self):
+        for value in ['doing', 'fail']:
+            Task.objects.filter(id=self.task1.id).update(status=value)
+            response = self.client.patch(self.toggle_url(self.task1.id))
+            self.assertEqual(response.data['status'], 'done')
